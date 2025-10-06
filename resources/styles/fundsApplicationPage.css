@@ -180,6 +180,7 @@ body {
     text-align: center;
     width: 120px;
     font-family: 'Montserrat', sans-serif; 
+    display: flex;
 }
 
 .balance-amount:focus {
@@ -215,4 +216,44 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 100vh; 
+}
+.balance-item-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.balance-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-grow: 1;
+}
+.delete-form {
+    margin: 0;
+}
+
+.delete-btn {
+    color: white;
+    background-color: #2E2E38;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.item-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
 }

@@ -200,22 +200,7 @@ body {
     font-weight: 700;
     border: 2px solid #FFFFFF;
 }
-@media (max-width: 768px) {
-    .form-row {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
-    }
-    .form-row input {
-        width: 100%;
-    }
-    .balance-item {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 1rem;
-        padding: 1.25rem;
-    }
-}
+
 .footer {
     background-color: #2E2E38;
     color: #a0aec0;
@@ -253,4 +238,72 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    position: relative;
+}
+
+.card-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.details-button-link {
+    text-decoration: none;
+    flex: 1;
+}
+
+.add-form {
+    flex: 1;
+}
+
+.details-button {
+    background: transparent;
+    border: 3px solid #d1d5db;
+    color: #d1d5db;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+    width: 100%;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.add-button {
+    background: transparent;
+    border: 3px solid #FFE600;
+    color: #FFE600;
+}
+
+.details-button:hover {
+    background-color: #4a5568;
+    border-color: #a0aec0;
+}
+
+.add-button:hover {
+    background-color: #FFE600;
+    color: #2E2E38;
+    border-color: #FFE600;
+}
+
+.details-button-added {
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    cursor: not-allowed;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-top: 27px;
+    width: 100%;
+}
+
+.item-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
 }

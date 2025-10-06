@@ -25,33 +25,47 @@
         <h1>Добавьте счёт в ваш прогноз</h1>
         <div class="search-container header-content">
             <form action="/mainPage" method="GET">
-                <input type="text" name="query" placeholder="Введите название операции" value="{{ .query }}">
+                <input type="text" name="accountSearch" placeholder="Введите название операции" value="{{ .accountSearch }}">
                 <button>найти</button>
             </form>
             </div>
-        <div class="cards-grid">
-             {{ range .accounts }}
-            <div class="card">
-                <img src="{{ .Image }}" alt="{{ .Title }}" class="icon-wrapper">
-                <h3> {{ .Title }}</h3>
-                <a href="/account/{{ .ID }}"><button class="details-button" href="/account/{{ .ID }}">Подробнее </button></a>
-            </div>
+<div class="cards-grid">
+    {{ range .accounts }}
+    <div class="card">
+        <img src="{{ .Image }}" alt="{{ .Title }}" class="icon-wrapper">
+        <h3> {{ .Title }}</h3>
+                <div class="card-buttons">
+        <a href="/account/{{ .ID }}"><button class="details-button">Подробнее</button></a>
+        
+        <form action="/add-to-fundsApplication" method="POST" style="display: inline;">
+            <input type="hidden" name="account_id" value="{{ .ID }}">
+            
+            {{ if .InCart }}
+                <button class="details-button-added" disabled>Добавлено</button>
+            {{ else }}
+                <button type="submit" class="details-button">Добавить</button>
             {{ end }}
+        </form>
         </div>
-    </main>
+        </div>
+    {{ end }}
+</div>
+</main>
+
+<a href="/fundsApplication/{{ .FundsApplicationID }}" class="cart-button">
+    <div class="cart-icon">
+        <svg class="icon-list" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+        </svg>
+        {{ if ne .accounts_count 0 }}
+            <span class="cart-counter">{{ .accounts_count }}</span>
+        {{ end }}
+    </div>
+</a>
     <footer class="footer">
         <div class="footer-content">
             <p>© 2025 CashFlow. Все права защищены.</p>
         </div>
     </footer>
-    </div>
-    <a href="/cart/1" class="cart-button">
-        <div class="cart-icon">
-            <svg class="icon-list" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-            <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
-        </svg>
-            <span class="cart-counter">3</span>
-        </div>
-    </a>
 </body>
 </html>
