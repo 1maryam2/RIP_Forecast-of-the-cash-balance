@@ -8,28 +8,20 @@ import (
 	"lab_1/internal/app/dsn"
 	"lab_1/internal/app/handler"
 	"lab_1/internal/app/repository"
-	"lab_1/internal/pkg"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/sirupsen/logrus"
 )
 
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		fmt.Println("Error loading .env file:", err)
+		fmt.Println("Error loading .env file, trying parent dirs...")
 		godotenv.Load("../../.env")
-		godotenv.Load("../../../.env")
-	} else {
-		fmt.Println(".env file loaded successfully")
 	}
-	fmt.Println("=== Environment Variables ===")
-	fmt.Println("DB_HOST:", os.Getenv("DB_HOST"))
-	fmt.Println("DB_PORT:", os.Getenv("DB_PORT"))
-	fmt.Println("DB_USER:", os.Getenv("DB_USER"))
-	fmt.Println("DB_NAME:", os.Getenv("DB_NAME"))
-	fmt.Println("=============================")
 
 	router := gin.Default()
 	conf, err := config.NewConfig()
@@ -37,13 +29,42 @@ func main() {
 		logrus.Fatalf("error loading config: %v", err)
 	}
 
+	var minioClient *minio.Client
+	endpoint := os.Getenv("MINIO_ENDPOINT")
+	accessKeyID := os.Getenv("MINIO_ACCESS_KEY_ID")
+	secretAccessKey := os.Getenv("MINIO_SECRET_ACCESS_KEY")
+	useSSL := os.Getenv("MINIO_USE_SSL") == "true"
+
+	if endpoint != "" && accessKeyID != "" && secretAccessKey != "" {
+		minioClient, err = minio.New(endpoint, &minio.Options{
+			Creds:  credentials.NewStaticV4(accessKeyID, secretAccessKey, ""),
+			Secure: useSSL,
+		})
+		if err != nil {
+			logrus.Errorf("Error initializing MinIO client, continuing with mock: %v", err)
+			minioClient = nil
+		} else {
+			logrus.Info("MinIO client initialized successfully.")
+		}
+	} else {
+		logrus.Warn("MinIO environment variables not found. Using MockMinioClient in repository.")
+	}
+
 	postgresString := dsn.FromEnv()
 	fmt.Println("DSN string:", postgresString)
-	rep, errRep := repository.New(postgresString)
+	rep, errRep := repository.New(postgresString, minioClient)
 	if errRep != nil {
 		logrus.Fatalf("error initializing repository: %v", errRep)
 	}
 	hand := handler.NewHandler(rep)
-	application := pkg.NewApp(conf, router, hand)
-	application.RunApp()
+	hand.RegisterRoutes(router)
+	serverAddress := fmt.Sprintf("%s:%d", conf.ServiceHost, conf.ServicePort)
+	if serverAddress == ":0" {
+		serverAddress = ":8080"
+	}
+
+	fmt.Printf("Starting server on %s\n", serverAddress)
+	if err := router.Run(serverAddress); err != nil {
+		logrus.Fatalf("Failed to run server: %v", err)
+	}
 }

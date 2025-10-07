@@ -1,207 +1,363 @@
 package repository
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"lab_1/internal/app/ds"
+	"math/rand"
+	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/minio/minio-go/v7"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
-func (r *Repository) GetAccountByID(id int) (*ds.Account, error) {
-	query := "SELECT id, code, title, description, is_active FROM accounts WHERE id = $1 and is_active = true"
-	row := r.db.Raw(query, id).Row()
-	account := &ds.Account{}
-	err := row.Scan(
-		&account.ID,
-		&account.Code,
-		&account.Title,
-		&account.Description,
-		&account.IsActive,
-	)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, err
-	}
+type MockMinioClient struct{}
 
-	return account, nil
+func (m *MockMinioClient) PutObject(bucketName, objectName string, reader io.Reader, objectSize int64, opts minio.PutObjectOptions) (minio.UploadInfo, error) {
+	fmt.Printf("MinIO Mock: Uploading %s/%s\n", bucketName, objectName)
+	return minio.UploadInfo{Key: objectName}, nil
 }
 
-func (r *Repository) CalculateFundsApplicationResult(fundsApplicationID int) (float64, error) {
-	var initialSum float64
-	query := "SELECT initial_sum FROM funds_applications WHERE id = $1"
-	row := r.db.Raw(query, fundsApplicationID).Row()
-	if err := row.Scan(&initialSum); err != nil {
-		return 0, err
-	}
-	query = `
-        SELECT ci.amount, a.type, a.category 
-        FROM funds_application_items ci 
-        JOIN accounts a ON ci.account_id = a.id 
-        WHERE ci.funds_application_id = $1
-    `
-	rows, err := r.db.Raw(query, fundsApplicationID).Rows()
-	if err != nil {
-		return 0, err
-	}
-	defer rows.Close()
-
-	result := initialSum
-
-	for rows.Next() {
-		var amount float64
-		var accType, category string
-
-		if err := rows.Scan(&amount, &accType, &category); err != nil {
-			return 0, err
-		}
-		switch accType {
-		case "income":
-			result += amount // Доходы увеличивают итог
-		case "expense":
-			result -= amount // Расходы уменьшают итог
-		case "tax":
-			result -= amount // Налоги уменьшают итог
-		default:
-			result -= amount // По умолчанию вычитаем
-		}
-	}
-	return result, nil
-}
-
-func (r *Repository) GetAccountIDsInCart(fundsApplicationID uint) ([]uint, error) {
-	var accountIDs []uint
-	err := r.db.Model(&ds.FundsApplicationItem{}).Where("funds_application_id = ?", fundsApplicationID).Pluck("account_id", &accountIDs).Error
-	if err != nil {
-		return nil, err
-	}
-	return accountIDs, nil
-}
-
-func (r *Repository) GetOrCreateFundsApplicationForUser(userID uint) (*ds.FundsApplication, error) {
-	var fundsApplication ds.FundsApplication
-	err := r.db.Where("id = ? AND is_active = ?", 1, true).First(&fundsApplication).Error
-
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		newCart := ds.FundsApplication{
-			Name:     fmt.Sprintf("Cart for user %d", userID),
-			IsActive: true,
-		}
-		if err := r.db.Create(&newCart).Error; err != nil {
-			return nil, err
-		}
-		return &newCart, nil
-	} else if err != nil {
-		return nil, err
-	}
-
-	return &fundsApplication, nil
-}
-
-func (r *Repository) DeleteFundsApplicationItem(fundsApplicationItemID uint) error {
-	err := r.db.Where("id = ?", fundsApplicationItemID).Delete(&ds.FundsApplicationItem{}).Error
-	if err != nil {
-		return fmt.Errorf("ошибка при удалении элемента корзины: %w", err)
-	}
-	fmt.Printf("Удален элемент корзины с ID: %d\n", fundsApplicationItemID)
+func (m *MockMinioClient) RemoveObject(bucketName, objectName string, opts minio.RemoveObjectOptions) error {
+	fmt.Printf("MinIO Mock: Deleting %s/%s\n", bucketName, objectName)
 	return nil
 }
 
-func (r *Repository) AddToFundsApplication(accountID uint, fundsApplicationID uint) error {
-	var existingItems []ds.FundsApplicationItem
-	err := r.db.Where("funds_application_id = ? AND account_id = ?", fundsApplicationID, accountID).Find(&existingItems).Error
+func (r *Repository) CreateUser(user *ds.Users) error {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
-	if len(existingItems) > 0 {
-		return nil
-	}
-	fundsApplicationItem := ds.FundsApplicationItem{
-		FundsApplicationID: fundsApplicationID,
-		AccountID:          accountID,
-		Amount:             0,
-		Comment:            "",
-	}
-	return r.db.Create(&fundsApplicationItem).Error
+	user.Password = string(hashedPassword)
+	return r.db.Create(user).Error
 }
-func (r *Repository) UpdateFundsApplicationResult(fundsApplicationID int, result float64) error {
-	err := r.db.Model(&ds.FundsApplication{}).Where("id = ?", fundsApplicationID).Update("result", result).Error
-	if err != nil {
-		return fmt.Errorf("ошибка при обновлении результата заявки: %w", err)
+
+func (r *Repository) GetUserByLogin(login string) (*ds.Users, error) {
+	var user ds.Users
+	if err := r.db.Where("login = ?", login).First(&user).Error; err != nil {
+		return nil, err
 	}
+	return &user, nil
+}
+
+func (r *Repository) GetUserByID(id uint) (*ds.Users, error) {
+	var user ds.Users
+	if err := r.db.First(&user, id).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *Repository) CheckPasswordHash(password, hash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
+}
+
+func (r *Repository) UpdateUser(id uint, updates map[string]interface{}) error {
+	return r.db.Model(&ds.Users{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func (r *Repository) CreateAccount(account *ds.Account) error {
+	return r.db.Create(account).Error
+}
+
+func (r *Repository) UpdateAccount(id uint, updates map[string]interface{}) error {
+	return r.db.Model(&ds.Account{}).Where("id = ? AND is_active = true", id).Updates(updates).Error
+}
+
+func (r *Repository) DeleteAccount(id uint) error {
+	var account ds.Account
+	if err := r.db.Where("id = ? AND is_active = true", id).First(&account).Error; err != nil {
+		return err
+	}
+	err := r.db.Model(&ds.Account{}).Where("id = ?", id).Update("is_active", false).Error
+	if err != nil {
+		return err
+	}
+	if account.Image != "" {
+		//r.MinIOClient.RemoveObject(AccountBucket, account.Image, minio.RemoveObjectOptions{})
+		fmt.Printf("MinIO Mock: Image removed for account %d: %s\n", id, account.Image)
+	}
+
 	return nil
 }
-func (r *Repository) GetAccount(id int) (ds.Account, error) {
-	account := ds.Account{}
-	err := r.db.Where("id = ?", id).First(&account).Error
-	if err != nil {
-		return ds.Account{}, err
-	}
-	return account, nil
+
+func (r *Repository) SetAccountImage(accountID uint, imageName string) error {
+	return r.db.Model(&ds.Account{}).Where("id = ? AND is_active = true", accountID).Update("image", imageName).Error
 }
 
 func (r *Repository) GetAllAccounts() ([]ds.Account, error) {
 	var accounts []ds.Account
 	err := r.db.Where("is_active = true").Find(&accounts).Error
-	if err != nil {
-		return nil, err
-	}
-	if len(accounts) == 0 {
-		return nil, fmt.Errorf("массив пустой")
-	}
-
-	return accounts, nil
+	return accounts, err
 }
 
-func (r *Repository) GetAccountsByTitle(title string) ([]ds.Account, error) {
+func (r *Repository) GetAccountsByTitleByFilter(query ds.AccountsFilter) ([]ds.Account, error) {
 	var accounts []ds.Account
-	err := r.db.Where("title ILIKE ?", "%"+title+"%").Find(&accounts).Error
-	if err != nil {
-		return nil, err
+	dbQuery := r.db.Where("is_active = true")
+
+	if query.Search != "" {
+		dbQuery = dbQuery.Where("title ILIKE ?", "%"+query.Search+"%")
 	}
-	return accounts, nil
+	if query.Type != "" {
+		dbQuery = dbQuery.Where("type = ?", query.Type)
+	}
+	if query.Category != "" {
+		dbQuery = dbQuery.Where("category = ?", query.Category)
+	}
+
+	err := dbQuery.Find(&accounts).Error
+	return accounts, err
 }
-func (r *Repository) GetFundsApplicationCount(fundsApplicationID uint) int64 {
+
+func (r *Repository) GetAccountByID(id uint) (*ds.Account, error) {
+	var account ds.Account
+	err := r.db.Where("id = ? AND is_active = true", id).First(&account).Error
+	return &account, err
+}
+
+func (r *Repository) GetFundsApplicationCountForUser(userID uint) (uint, int64, error) {
+	draft, err := r.GetUserDraftApplication(userID)
+	if err != nil {
+		return 0, 0, err
+	}
+
 	var count int64
-	err := r.db.Model(&ds.FundsApplicationItem{}).Where("funds_application_id = ?", fundsApplicationID).Count(&count).Error
-	if err != nil {
-		logrus.Println("Error counting records in cart_items:", err)
-		return 0
-	}
-	return count
+	err = r.db.Model(&ds.FundsApplicationItem{}).
+		Where("funds_application_id = ?", draft.ID).
+		Count(&count).Error
+
+	return draft.ID, count, err
 }
 
-func (r *Repository) GetFundsApplication(id int) (map[string]interface{}, error) {
-	var fundsApplication ds.FundsApplication
-	err := r.db.Preload("FundsApplicationItem.Account").Where("id = ?", id).First(&fundsApplication).Error
-	if err != nil {
-		return nil, fmt.Errorf("ошибка получения корзины: %v", err)
+func (r *Repository) GetFundsApplicationsList(filter ds.ApplicationFilter) ([]ds.FundsApplication, error) {
+	var applications []ds.FundsApplication
+	dbQuery := r.db.Where("is_active = true AND status != ? AND status != ?", ds.Draft, ds.Deleted)
+
+	if filter.Status != "" {
+		dbQuery = dbQuery.Where("status = ?", filter.Status)
 	}
-	var items []map[string]interface{}
-	for _, item := range fundsApplication.FundsApplicationItem {
-		items = append(items, map[string]interface{}{
-			"FundsApplicationItemID":          item.ID,
-			"FundsApplicationID":              item.FundsApplicationID,
-			"AccountID":                       item.AccountID,
-			"FundsApplicationAccountImageURL": item.Account.Image,
-			"FundsApplicationAccountName":     item.Account.Title,
-			"FundsApplicationAccountCost":     item.Amount,
-			"Comment":                         item.Comment,
-		})
-	}
-	result := map[string]interface{}{
-		"FundsApplicationItems":       items,
-		"FundsApplicationCompanyName": fundsApplication.CompanyName,
-		"FundsApplicationINN":         fundsApplication.INN,
-		"FundsApplicationOGRN":        fundsApplication.OGRN,
-		"FundsApplicationInitialSum":  fundsApplication.InitialSum,
-		"FundsApplicationQuarter":     fundsApplication.Quarter,
-		"FundsApplicationResult":      fundsApplication.Result,
+	if filter.DateFrom != nil && filter.DateTo != nil {
+		dbQuery = dbQuery.Where("formed_at BETWEEN ? AND ?", *filter.DateFrom, *filter.DateTo)
 	}
 
-	return result, nil
+	err := dbQuery.
+		Preload("Creator").
+		Preload("Moderator").
+		Find(&applications).Error
+	for i := range applications {
+		if applications[i].Creator != nil {
+			applications[i].Creator.Password = ""
+		}
+		if applications[i].Moderator != nil {
+			applications[i].Moderator.Password = ""
+		}
+	}
+
+	return applications, err
+}
+
+func (r *Repository) GetUserDraftApplication(userID uint) (*ds.FundsApplication, error) {
+	var application ds.FundsApplication
+	err := r.db.Where("creator_id = ? AND status = ? AND is_active = true", userID, ds.Draft).First(&application).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		newApp := ds.FundsApplication{
+			Name:        fmt.Sprintf("Draft App for user %d", userID),
+			CreatorID:   userID,
+			Status:      ds.Draft,
+			IsActive:    true,
+			InitialSum:  0.0,
+			CompanyName: "Mock Company Name",
+		}
+		if err := r.db.Create(&newApp).Error; err != nil {
+			return nil, err
+		}
+		return &newApp, nil
+	}
+	return &application, err
+}
+
+func (r *Repository) GetFundsApplicationByID(id uint) (*ds.FundsApplication, error) {
+	var application ds.FundsApplication
+	err := r.db.Preload("FundsApplicationItem.Account").
+		Preload("Creator").
+		Preload("Moderator").
+		Where("is_active = true").
+		First(&application, id).Error
+
+	if application.Creator != nil {
+		application.Creator.Password = ""
+	}
+	if application.Moderator != nil {
+		application.Moderator.Password = ""
+	}
+
+	return &application, err
+}
+
+func (r *Repository) AddAccountToApplication(applicationID, accountID uint) error {
+	var count int64
+	r.db.Model(&ds.FundsApplicationItem{}).Where("funds_application_id = ? AND account_id = ?", applicationID, accountID).Count(&count)
+	if count > 0 {
+		return errors.New("account already in application")
+	}
+	var app ds.FundsApplication
+	if err := r.db.Select("status").First(&app, applicationID).Error; err != nil {
+		return err
+	}
+	if app.Status != ds.Draft {
+		return errors.New("cannot add items to non-draft application")
+	}
+
+	item := ds.FundsApplicationItem{
+		FundsApplicationID: applicationID,
+		AccountID:          accountID,
+		Amount:             1.0,
+	}
+	return r.db.Create(&item).Error
+}
+
+func (r *Repository) RemoveItemFromApplication(itemID uint) error {
+	var item ds.FundsApplicationItem
+	if err := r.db.Preload("FundsApplication").First(&item, itemID).Error; err != nil {
+		return err
+	}
+	if item.FundsApplication.Status != ds.Draft {
+		return errors.New("cannot remove item from non-draft application")
+	}
+
+	return r.db.Delete(&ds.FundsApplicationItem{}, itemID).Error
+}
+
+func (r *Repository) UpdateApplicationItem(itemID uint, req ds.UpdateFundsApplicationItemRequest) error {
+	var item ds.FundsApplicationItem
+	if err := r.db.Preload("FundsApplication").First(&item, itemID).Error; err != nil {
+		return err
+	}
+	if item.FundsApplication.Status != ds.Draft {
+		return errors.New("cannot update item in non-draft application")
+	}
+
+	return r.db.Model(&ds.FundsApplicationItem{}).Where("id = ?", itemID).Updates(req).Error
+}
+
+func (r *Repository) UpdateFundsApplication(appID uint, req ds.UpdateFundsApplicationRequest) error {
+	var app ds.FundsApplication
+	if err := r.db.Select("status").First(&app, appID).Error; err != nil {
+		return err
+	}
+	if app.Status != ds.Draft {
+		return errors.New("only draft applications can be updated")
+	}
+
+	updates := map[string]interface{}{}
+	if req.CompanyName != "" {
+		updates["company_name"] = req.CompanyName
+	}
+	if req.INN != "" {
+		updates["inn"] = req.INN
+	}
+	if req.OGRN != "" {
+		updates["ogrn"] = req.OGRN
+	}
+	if req.InitialSum != 0 {
+		updates["initial_sum"] = req.InitialSum
+	}
+	if req.Quarter != 0 {
+		updates["quarter"] = req.Quarter
+	}
+
+	return r.db.Model(&ds.FundsApplication{}).Where("id = ?", appID).Updates(updates).Error
+}
+func (r *Repository) FormApplication(appID uint) error {
+	var app ds.FundsApplication
+	if err := r.db.First(&app, appID).Error; err != nil {
+		return err
+	}
+	if app.Status != ds.Draft {
+		return errors.New("only draft application can be formed")
+	}
+	if app.CompanyName == "" || app.INN == "" || app.OGRN == "" || app.InitialSum <= 0 || app.Quarter == 0 {
+		return errors.New("application is missing required fields (company_name, inn, ogrn, initial_sum, quarter)")
+	}
+	var count int64
+	r.db.Model(&ds.FundsApplicationItem{}).Where("funds_application_id = ?", appID).Count(&count)
+	if count == 0 {
+		return errors.New("application must contain at least one account item")
+	}
+
+	now := time.Now()
+	updates := map[string]interface{}{
+		"status":    ds.Formed,
+		"formed_at": &now,
+	}
+	return r.db.Model(&ds.FundsApplication{}).Where("id = ?", appID).Updates(updates).Error
+}
+func calculateResult(initialSum float64, quarter int) float64 {
+	bonus := rand.Float64() * 1000
+	return initialSum*(1+float64(quarter)*0.05) + bonus
+}
+
+func (r *Repository) CompleteApplication(appID uint, moderatorID uint) error {
+	var app ds.FundsApplication
+	if err := r.db.First(&app, appID).Error; err != nil {
+		return err
+	}
+	if app.Status != ds.Formed {
+		return errors.New("only formed application can be completed")
+	}
+	calculatedResult := calculateResult(app.InitialSum, app.Quarter)
+
+	now := time.Now()
+	updates := map[string]interface{}{
+		"status":       ds.Completed,
+		"moderator_id": moderatorID,
+		"completed_at": &now,
+		"result":       calculatedResult,
+	}
+	return r.db.Model(&ds.FundsApplication{}).Where("id = ?", appID).Updates(updates).Error
+}
+func (r *Repository) RejectApplication(appID uint, moderatorID uint) error {
+	var app ds.FundsApplication
+	if err := r.db.First(&app, appID).Error; err != nil {
+		return err
+	}
+	if app.Status != ds.Formed {
+		return errors.New("only formed application can be rejected")
+	}
+
+	now := time.Now()
+	updates := map[string]interface{}{
+		"status":       ds.Rejected,
+		"moderator_id": moderatorID,
+		"completed_at": &now,
+	}
+	return r.db.Model(&ds.FundsApplication{}).Where("id = ?", appID).Updates(updates).Error
+}
+
+func (r *Repository) DeleteFundsApplication(appID uint) error {
+	var app ds.FundsApplication
+	if err := r.db.First(&app, appID).Error; err != nil {
+		return err
+	}
+	if app.Status != ds.Draft {
+		return errors.New("only draft applications can be deleted")
+	}
+
+	now := time.Now()
+	updates := map[string]interface{}{
+		"status":    ds.Deleted,
+		"is_active": false,
+		"formed_at": &now,
+	}
+	return r.db.Model(&ds.FundsApplication{}).Where("id = ?", appID).Updates(updates).Error
+}
+
+var MockMinIOClient = &MockMinioClient{}
+
+func (r *Repository) SetMinIOClient(client interface{}) {
+	fmt.Println("MinIO Client set (mocked)")
 }

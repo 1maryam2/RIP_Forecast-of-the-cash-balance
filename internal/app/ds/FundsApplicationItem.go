@@ -5,14 +5,14 @@ import (
 )
 
 type FundsApplicationItem struct {
-	ID                 uint    `gorm:"primaryKey"`
-	FundsApplicationID uint    `gorm:"not null;uniqueIndex:idx_funds_application_account"`
-	AccountID          uint    `gorm:"not null;uniqueIndex:idx_funds_application_account"`
-	Amount             float64 `gorm:"type:decimal(15,2);not null"`
-	Comment            string  `gorm:"type:text"`
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	ID                 uint      `gorm:"primaryKey" json:"id"`
+	FundsApplicationID uint      `gorm:"not null" json:"funds_application_id"`
+	AccountID          uint      `gorm:"not null" json:"account_id"`
+	Amount             float64   `gorm:"type:decimal(15,2);not null" json:"amount"`
+	Comment            string    `gorm:"type:text" json:"comment"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 
-	FundsApplication FundsApplication `gorm:"foreignKey:FundsApplicationID"`
-	Account          Account          `gorm:"foreignKey:AccountID"`
+	FundsApplication FundsApplication `gorm:"foreignKey:FundsApplicationID" json:"-"`
+	Account          Account          `gorm:"foreignKey:AccountID" json:"account"`
 }

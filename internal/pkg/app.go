@@ -1,4 +1,4 @@
-package pkg
+/* package pkg
 
 import (
 	"fmt"
@@ -36,3 +36,4 @@ func (a *Application) RunApp() {
 	}
 	logrus.Info("Server down")
 }
+*/
