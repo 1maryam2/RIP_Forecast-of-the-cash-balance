@@ -118,8 +118,8 @@ func (r *Repository) GetAccountByID(id uint) (*ds.Account, error) {
 	return &account, err
 }
 
-func (r *Repository) GetFundsApplicationCountForUser(userID uint) (uint, int64, error) {
-	draft, err := r.GetUserDraftApplication(userID)
+func (r *Repository) GetCashForecastCountForUser(userID uint) (uint, int64, error) {
+	draft, err := r.GetUserDraftCashForecast(userID)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -132,13 +132,10 @@ func (r *Repository) GetFundsApplicationCountForUser(userID uint) (uint, int64, 
 	return draft.ID, count, err
 }
 
-func (r *Repository) GetFundsApplicationsList(filter ds.ApplicationFilter) ([]ds.FundsApplication, error) {
+func (r *Repository) GetCashForecastsList(filter ds.ApplicationFilter) ([]ds.FundsApplication, error) {
 	var applications []ds.FundsApplication
-	dbQuery := r.db.Where("is_active = true AND status != ? AND status != ?", ds.Draft, ds.Deleted)
+	dbQuery := r.db.Where("is_active = true")
 
-	if filter.Status != "" {
-		dbQuery = dbQuery.Where("status = ?", filter.Status)
-	}
 	if filter.DateFrom != nil && filter.DateTo != nil {
 		dbQuery = dbQuery.Where("formed_at BETWEEN ? AND ?", *filter.DateFrom, *filter.DateTo)
 	}
@@ -159,18 +156,21 @@ func (r *Repository) GetFundsApplicationsList(filter ds.ApplicationFilter) ([]ds
 	return applications, err
 }
 
-func (r *Repository) GetUserDraftApplication(userID uint) (*ds.FundsApplication, error) {
+func (r *Repository) GetUserDraftCashForecast(userID uint) (*ds.FundsApplication, error) {
 	var application ds.FundsApplication
 	err := r.db.Where("creator_id = ? AND status = ? AND is_active = true", userID, ds.Draft).First(&application).Error
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		newApp := ds.FundsApplication{
-			Name:        fmt.Sprintf("Draft App for user %d", userID),
+			Name:        fmt.Sprintf("Прогноз остатка для пользователя %d", userID),
 			CreatorID:   userID,
 			Status:      ds.Draft,
 			IsActive:    true,
-			InitialSum:  0.0,
-			CompanyName: "Mock Company Name",
+			InitialSum:  1000.0,
+			CompanyName: "Название компании",
+			INN:         "1234567890",
+			OGRN:        "1234567890123",
+			Quarter:     1,
 		}
 		if err := r.db.Create(&newApp).Error; err != nil {
 			return nil, err
@@ -180,7 +180,7 @@ func (r *Repository) GetUserDraftApplication(userID uint) (*ds.FundsApplication,
 	return &application, err
 }
 
-func (r *Repository) GetFundsApplicationByID(id uint) (*ds.FundsApplication, error) {
+func (r *Repository) GetCashForecastByID(id uint) (*ds.FundsApplication, error) {
 	var application ds.FundsApplication
 	err := r.db.Preload("FundsApplicationItem.Account").
 		Preload("Creator").
@@ -198,7 +198,7 @@ func (r *Repository) GetFundsApplicationByID(id uint) (*ds.FundsApplication, err
 	return &application, err
 }
 
-func (r *Repository) AddAccountToApplication(applicationID, accountID uint) error {
+func (r *Repository) AddAccountToCashForecast(applicationID, accountID uint) error {
 	var count int64
 	r.db.Model(&ds.FundsApplicationItem{}).Where("funds_application_id = ? AND account_id = ?", applicationID, accountID).Count(&count)
 	if count > 0 {
@@ -220,7 +220,7 @@ func (r *Repository) AddAccountToApplication(applicationID, accountID uint) erro
 	return r.db.Create(&item).Error
 }
 
-func (r *Repository) RemoveItemFromApplication(itemID uint) error {
+func (r *Repository) RemoveItemFromCashForecast(itemID uint) error {
 	var item ds.FundsApplicationItem
 	if err := r.db.Preload("FundsApplication").First(&item, itemID).Error; err != nil {
 		return err
@@ -232,7 +232,7 @@ func (r *Repository) RemoveItemFromApplication(itemID uint) error {
 	return r.db.Delete(&ds.FundsApplicationItem{}, itemID).Error
 }
 
-func (r *Repository) UpdateApplicationItem(itemID uint, req ds.UpdateFundsApplicationItemRequest) error {
+func (r *Repository) UpdateCashForecastItem(itemID uint, req ds.UpdateFundsApplicationItemRequest) error {
 	var item ds.FundsApplicationItem
 	if err := r.db.Preload("FundsApplication").First(&item, itemID).Error; err != nil {
 		return err
@@ -244,7 +244,7 @@ func (r *Repository) UpdateApplicationItem(itemID uint, req ds.UpdateFundsApplic
 	return r.db.Model(&ds.FundsApplicationItem{}).Where("id = ?", itemID).Updates(req).Error
 }
 
-func (r *Repository) UpdateFundsApplication(appID uint, req ds.UpdateFundsApplicationRequest) error {
+func (r *Repository) UpdateCashForecast(appID uint, req ds.UpdateFundsApplicationRequest) error {
 	var app ds.FundsApplication
 	if err := r.db.Select("status").First(&app, appID).Error; err != nil {
 		return err
@@ -272,7 +272,7 @@ func (r *Repository) UpdateFundsApplication(appID uint, req ds.UpdateFundsApplic
 
 	return r.db.Model(&ds.FundsApplication{}).Where("id = ?", appID).Updates(updates).Error
 }
-func (r *Repository) FormApplication(appID uint) error {
+func (r *Repository) FormCashForecast(appID uint) error {
 	var app ds.FundsApplication
 	if err := r.db.First(&app, appID).Error; err != nil {
 		return err
@@ -301,7 +301,7 @@ func calculateResult(initialSum float64, quarter int) float64 {
 	return initialSum*(1+float64(quarter)*0.05) + bonus
 }
 
-func (r *Repository) CompleteApplication(appID uint, moderatorID uint) error {
+func (r *Repository) CompleteCashForecast(appID uint, moderatorID uint) error {
 	var app ds.FundsApplication
 	if err := r.db.First(&app, appID).Error; err != nil {
 		return err
@@ -320,7 +320,7 @@ func (r *Repository) CompleteApplication(appID uint, moderatorID uint) error {
 	}
 	return r.db.Model(&ds.FundsApplication{}).Where("id = ?", appID).Updates(updates).Error
 }
-func (r *Repository) RejectApplication(appID uint, moderatorID uint) error {
+func (r *Repository) RejectCashForecast(appID uint, moderatorID uint) error {
 	var app ds.FundsApplication
 	if err := r.db.First(&app, appID).Error; err != nil {
 		return err
@@ -338,7 +338,7 @@ func (r *Repository) RejectApplication(appID uint, moderatorID uint) error {
 	return r.db.Model(&ds.FundsApplication{}).Where("id = ?", appID).Updates(updates).Error
 }
 
-func (r *Repository) DeleteFundsApplication(appID uint) error {
+func (r *Repository) DeleteCashForecast(appID uint) error {
 	var app ds.FundsApplication
 	if err := r.db.First(&app, appID).Error; err != nil {
 		return err
