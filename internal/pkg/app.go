@@ -10,21 +10,21 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type Application struct {
+type FundsApplication struct {
 	Config  *config.Config
 	Router  *gin.Engine
 	Handler *handler.Handler
 }
 
-func NewApp(c *config.Config, r *gin.Engine, h *handler.Handler) *Application {
-	return &Application{
+func NewApp(c *config.Config, r *gin.Engine, h *handler.Handler) *FundsApplication {
+	return &FundsApplication{
 		Config:  c,
 		Router:  r,
 		Handler: h,
 	}
 }
 
-func (a *Application) RunApp() {
+func (a *FundsApplication) RunApp() {
 	logrus.Info("Server start up")
 
 	a.Handler.RegisterHandler(a.Router)
@@ -36,4 +36,4 @@ func (a *Application) RunApp() {
 	}
 	logrus.Info("Server down")
 }
-*/
+ */

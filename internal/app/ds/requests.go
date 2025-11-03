@@ -8,7 +8,9 @@ type LoginRequest struct {
 	Login    string `json:"login" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
-
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
 type RegisterRequest struct {
 	Login       string `json:"login" binding:"required"`
 	Password    string `json:"password" binding:"required"`
