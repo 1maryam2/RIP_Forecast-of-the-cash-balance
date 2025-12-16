@@ -1,0 +1,124 @@
+body {
+    margin: 0;
+    font-family: 'Montserrat', sans-serif;
+    background-color: #eef2f7;
+    color: #2d3748;
+}
+
+* {
+    box-sizing: border-box;
+}
+.header {
+    background-color: #2E2E38;
+    padding: 1rem 2.5rem;
+    color: #ffffff;
+}
+
+.header-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.logo {
+    font-size: 1.75rem;
+    font-weight: 700;
+    text-decoration: none;
+    display: inline-block; 
+}
+.logo-cash {
+    color: #FFE600;
+}
+.logo-flow {
+    color: #FFFFFF;
+}
+.main-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 3rem 2.5rem;
+    flex: 1;
+}
+
+.main-content h1 {
+    text-align: center;
+    font-size: 2rem;
+    font-weight: 600;
+    margin-top: 0;
+    margin-bottom: 2rem;
+}
+.details-card {
+    max-width: 900px;
+    margin: 2rem auto;
+    background-color: #2E2E38;
+    color: #ffffff;
+    border-radius: 16px;
+    padding: 3rem 4rem;
+    position: relative;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+.details-card h1 {
+    font-size: 2.25rem;
+    font-weight: 600;
+    margin-top: 0;
+    margin-bottom: 1rem;
+}
+
+.details-card p {
+    color: #a0aec0;
+    font-size: 1.1rem;
+    line-height: 1.6;
+    max-width: 100%;
+    margin: 0; 
+}
+.back-arrow {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+.back-arrow:hover {
+    background-color: #4a5568;
+}
+.card-title-group {
+    display: flex;
+    align-items: center; 
+    gap: 1.5rem; 
+    margin-bottom: 1.5rem; 
+}
+.details-icon {
+    margin-bottom: 1.5rem;
+    align-items: start;
+    width: 350px;
+    height: 250px;
+    border-radius: 10%;
+}
+.footer {
+    background-color: #2E2E38;
+    color: #a0aec0;
+    padding: 1.5rem 2.5rem;
+    margin-top: auto;
+}
+
+.footer-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.footer-content p {
+    margin: 0;
+}
+.container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
