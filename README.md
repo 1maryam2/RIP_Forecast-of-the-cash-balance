@@ -3,7 +3,7 @@
 
 ---
 * Ссылка на репозиторий бэкенда:
-[https://github.com/g0shi4ek/RIP_backend](https://github.com/1maryam2/RIP_backend_cash_flow
+https://github.com/1maryam2/RIP_backend_cash_flow
 * Ссылка на репозиторий фронтенда:
 https://github.com/1maryam2/RIP_frontend_cash_flow
 * Ссылка на репозиторий асинхронного сервиса на Python:
